@@ -1,0 +1,16 @@
+Metadata-Version: 2.1
+Name: vision-localization
+Version: 0.0.1
+Summary: Vision-based localization using ArUco markers.
+Home-page: https://github.com/jehontan/vision_localization
+Author: Je Hon Tan
+Author-email: jehontan@gmail.com
+Project-URL: Bug Tracker, https://github.com/jehontan/vision_localization/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# vision_localization

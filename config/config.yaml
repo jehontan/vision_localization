@@ -1,0 +1,94 @@
+---
+# Marker parameters
+marker_size: 0.1
+roaming_markers:
+  - id: 4
+fixed_markers:
+  - id: 0
+    position:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+  - id: 1
+    position:
+      x: 7.0
+      y: 0.0
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+  - id: 2
+    position:
+      x: 7.0
+      y: 5.0
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+  - id: 3
+    position:
+      x: 0.0
+      y: 5.0
+      z: 0.0
+    orientation:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+
+# Camera nodes
+cameras:
+  camera_1:
+    host: '127.0.0.1'
+    port: 5912
+    fx: 1426.67
+    fy: 1134.56
+    cx: 960.00
+    cy: 540.00
+    D: [0.0, 0.0, 0.0, 0.0] # distortion params
+  camera_2:
+    host: '0.0.0.0'
+    port: 5912
+    fx: 1426.67
+    fy: 1134.56
+    cx: 960.00
+    cy: 540.00
+    D: [0.0, 0.0, 0.0, 0.0]
+  camera_3:
+    host: '0.0.0.0'
+    port: 5912
+    fx: 1426.67
+    fy: 1134.56
+    cx: 960.00
+    cy: 540.00
+    D: [0.0, 0.0, 0.0, 0.0]
+  camera_4:
+    host: '0.0.0.0'
+    port: 5912
+    fx: 1426.67
+    fy: 1134.56
+    cx: 960.00
+    cy: 540.00
+    D: [0.0, 0.0, 0.0, 0.0]
+
+# Localiztion server
+server:
+  host: '0.0.0.0'
+  port: 5566
+
+clues:
+  - clue_id:  1
+    trigger:
+      x: 2.0
+      y: 2.0
+      r: 1.0
+    location:
+      x: 6.5
+      y: 4.0
+    audio_file:
+      'SM4_F48_A0100.wav'  # use absolute path
