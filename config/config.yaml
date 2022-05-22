@@ -46,6 +46,7 @@ cameras:
   camera_1:
     host: '127.0.0.1'
     port: 5912
+    stream: on
     fx: 1426.67
     fy: 1134.56
     cx: 960.00
@@ -54,6 +55,7 @@ cameras:
   camera_2:
     host: '0.0.0.0'
     port: 5912
+    stream: off
     fx: 1426.67
     fy: 1134.56
     cx: 960.00
@@ -62,6 +64,7 @@ cameras:
   camera_3:
     host: '0.0.0.0'
     port: 5912
+    stream: off
     fx: 1426.67
     fy: 1134.56
     cx: 960.00
@@ -70,6 +73,7 @@ cameras:
   camera_4:
     host: '0.0.0.0'
     port: 5912
+    stream: off
     fx: 1426.67
     fy: 1134.56
     cx: 960.00

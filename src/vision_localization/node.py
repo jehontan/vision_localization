@@ -16,6 +16,7 @@ D = D = np.zeros((1,4))     # Distortion parameters
 host = '0.0.0.0'
 port = 5912
 marker_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_1000)
+is_streaming = False
 
 ##### Utility functions #####
 
@@ -36,7 +37,7 @@ def rvec2quat(rvec):
 
 def load_config(args):
     '''Load markers from config YAML file.'''
-    global config, fixed_markers, roaming_markers, host, port, K, D
+    global config, fixed_markers, roaming_markers, host, port, K, D, is_streaming
 
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
@@ -52,6 +53,8 @@ def load_config(args):
     
     K = np.array([[fx, 0, cx],[0, fy, cy],[0, 0, 1]])
     D = np.array(cam['D'])
+
+    is_streaming = cam['stream']
 
     for marker in config['fixed_markers']:
         position = marker['position']
@@ -69,7 +72,7 @@ def load_config(args):
 ##### Main function #####
 
 def main():
-    global config, fixed_markers, roaming_markers, marker_dict, host, port, K, D
+    global config, fixed_markers, roaming_markers, marker_dict, host, port, K, D, is_streaming
 
     # setup args
     parser = argparse.ArgumentParser()
@@ -117,55 +120,63 @@ def main():
             if not corners:
                 # no markers, early terminate
                 logging.warn('No markers found.')
-                continue
+            else:
+                # annotate frame
+                frame = cv2.aruco.drawDetectedMarkers(frame, corners, ids)
 
-            rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners, config['marker_size'], K, D)
-            ids_ = ids.flatten().tolist()
-            
-            fixed_inds = [] # indices corresponding to observed fixed markers
-            roam_inds = []  # indices corresponding to observed roaming markers
-
-            for i, id_ in enumerate(ids_):
-                if id_ in fixed_markers.keys():
-                    fixed_inds.append(i)
+                rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners, config['marker_size'], K, D)
+                ids_ = ids.flatten().tolist()
                 
-                if id_ in roaming_markers:
-                    roam_inds.append(i)
+                fixed_inds = [] # indices corresponding to observed fixed markers
+                roam_inds = []  # indices corresponding to observed roaming markers
 
-            # just pick first fixed marker as reference
-            fixed_ind = fixed_inds[0]
-            origin_to_fixed = fixed_markers[ids_[fixed_ind]]
-            fixed_to_cam = transformation(rvecs[fixed_ind], tvecs[fixed_ind])
-            origin_to_cam = fixed_to_cam @ origin_to_fixed
+                for i, id_ in enumerate(ids_):
+                    if id_ in fixed_markers.keys():
+                        fixed_inds.append(i)
+                    
+                    if id_ in roaming_markers:
+                        roam_inds.append(i)
 
-            # iterate over observed roaming markers
-            roaming_poses = dict()
+                # just pick first fixed marker as reference
+                fixed_ind = fixed_inds[0]
+                origin_to_fixed = fixed_markers[ids_[fixed_ind]]
+                fixed_to_cam = transformation(rvecs[fixed_ind], tvecs[fixed_ind])
+                origin_to_cam = fixed_to_cam @ origin_to_fixed
 
-            for roam_ind in roam_inds:
-                robot_to_cam = transformation(rvecs[roam_ind], tvecs[roam_ind])
+                # iterate over observed roaming markers
+                roaming_poses = dict()
 
-                robot_to_origin = np.linalg.inv(origin_to_cam)@robot_to_cam
+                for roam_ind in roam_inds:
+                    robot_to_cam = transformation(rvecs[roam_ind], tvecs[roam_ind])
 
-                position = robot_to_origin[:,3]
-                
-                rot = Rotation.from_matrix(robot_to_origin[:3,:3])
-                quat = rot.as_quat()
+                    robot_to_origin = np.linalg.inv(origin_to_cam)@robot_to_cam
 
-                roaming_poses[ids_[roam_ind]] = [
-                    position[0],
-                    position[1],
-                    position[2],
-                    quat[0],
-                    quat[1],
-                    quat[2],
-                    quat[3]
-                ]
+                    position = robot_to_origin[:,3]
+                    
+                    rot = Rotation.from_matrix(robot_to_origin[:3,:3])
+                    quat = rot.as_quat()
 
-            # send the poses
-            buf = json.dumps(roaming_poses).encode('utf-8')
-            socket.send_multipart([b'pose', buf])
-            logging.debug('sent')
+                    roaming_poses[ids_[roam_ind]] = [
+                        position[0],
+                        position[1],
+                        position[2],
+                        quat[0],
+                        quat[1],
+                        quat[2],
+                        quat[3]
+                    ]
+
+                # send the poses
+                buf = json.dumps(roaming_poses).encode('utf-8')
+                socket.send_multipart([b'pose', buf])
+                logging.debug('sent')
             
+            # stream frame
+            if is_streaming:
+                data = cv2.imencode('.jpg', frame)[1].tobytes()
+                socket.send_multipart([b'img', args.camera.encode('utf-8'), data])
+                logging.debug('Sent image.')
+
     finally:
         camera.release()
 

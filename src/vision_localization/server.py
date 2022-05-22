@@ -1,4 +1,5 @@
 import argparse
+from calendar import c
 import logging
 import yaml
 import zmq
@@ -18,6 +19,8 @@ port = 5566
 roaming_markers = dict()
 roaming_markers_lock = Lock()
 TARGET_MARKER_ID = 4
+camera_images = dict()
+camera_images_lock = Lock()
 
 ##### Utility function #####
 def distance(p1, p2):
@@ -67,12 +70,33 @@ def get_pose():
         'clues': clues
     }
 
+@app.route('/stream/<cam_name>', methods=['GET'])
+def get_cam_stream(cam_name):
+    if cam_name not in camera_images.keys():
+        return 'Camera not configured to stream.', 404
+    
+    return (
+        '<html><head><title>{0} Stream</title></head><body><img src="/mjpg/{0}"/></body></html>'.format(cam_name)
+    )
+    
+@app.route('/mjpg/<cam_name>', methods=['GET'])
+def get_cam_mjpg(cam_name):
+    return flask.Response(mjpg_generator(cam_name), mimetype='multipart/x-mixed-replace; boundary=fram')
+
+def mjpg_generator(cam_name):
+    while True:
+        camera_images_lock.acquire()
+        frame = camera_images[cam_name]
+        camera_images_lock.release()
+        yield (b'--frame\r\n'
+            b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
 
 ##### Configuration loading #####
 
 def load_config(args):
     '''Load markers from config YAML file.'''
-    global config, host, port, roaming_markers
+    global config, host, port, roaming_markers, camera_images
 
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
@@ -82,6 +106,10 @@ def load_config(args):
 
     for marker in config['roaming_markers']:
         roaming_markers[marker['id']] = None
+
+    for cam_name in config['cameras']:
+        if config['cameras'][cam_name]['stream']:
+            camera_images[cam_name] = None
 
 def start_server():
     global host, port
@@ -117,6 +145,7 @@ def main():
     context = zmq.Context()
     socket = context.socket(zmq.SUB)
     socket.subscribe(b'pose')
+    socket.subscribe(b'img')
     
     for cam_name in config['cameras']:
         cam = config['cameras'][cam_name]
@@ -128,14 +157,23 @@ def main():
     server_thread.start()
 
     while True:
-        _, data = socket.recv_multipart()
-        poses = json.loads(data)
-        
-        roaming_markers_lock.acquire()
-        for marker_id, marker_pose in poses.items():
-            marker_id = int(marker_id)
-            roaming_markers[marker_id] = marker_pose
-        roaming_markers_lock.release()
+        buf = socket.recv_multipart()
+        topic = buf[0]
+
+        if topic == b'pose':
+            poses = json.loads(buf[1])
+            
+            roaming_markers_lock.acquire()
+            for marker_id, marker_pose in poses.items():
+                marker_id = int(marker_id)
+                roaming_markers[marker_id] = marker_pose
+            roaming_markers_lock.release()
+        if topic == b'img':
+            cam_name = buf[1].decode('utf-8')
+            camera_images_lock.acquire()
+            camera_images[cam_name] = buf[2]
+            camera_images_lock.release()
+
 
 if __name__ == '__main__':
     main()
