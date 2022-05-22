@@ -12,7 +12,7 @@ config = dict()             # global configuration
 fixed_markers = dict()      # keys: marker id, value: origin -> marker transformation
 roaming_markers = list()    # list of roaming marker ids to watch
 K = np.zeros((3,3))         # Camera matrix
-D = D = np.zeros((1,4))     # Distortion parameters
+D = D = np.zeros((1,5))     # Distortion parameters
 host = '0.0.0.0'
 port = 5912
 marker_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_1000)
