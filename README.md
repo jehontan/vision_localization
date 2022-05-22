@@ -39,3 +39,19 @@ To run on localization server:
 ```sh
 localization_server --log <log_level> <config_file>
 ```
+
+## Camera Calibration
+
+To obtain camera intrinsics to populate the config file, use the provided
+calibration tool. The calibration process requires the use of a ChArUco board.
+
+Run the calibration tool on the camera node:
+
+```sh
+camera_calibrate -v
+```
+
+Use the `-h` flag for more information, including how to set ChArUco board parameters.
+
+You can view the camera view to help in board alignment by directing a browser to
+`http://<camera node host>:5127`.

@@ -34,7 +34,8 @@ setuptools.setup(
     entry_points={
         'console_scripts': [
             'localization_node=vision_localization.node:main',
-            'localization_server=vision_localization.server:main'
+            'localization_server=vision_localization.server:main',
+            'camera_calibrate=vision_localization.calibrate:main'
         ],
     }
 )
