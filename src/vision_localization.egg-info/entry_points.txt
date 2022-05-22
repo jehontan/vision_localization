@@ -1,3 +1,0 @@
-[console_scripts]
-localization_node = vision_localization.node:main
-localization_server = vision_localization.server:main
