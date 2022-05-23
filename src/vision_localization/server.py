@@ -1,6 +1,7 @@
 import argparse
 from calendar import c
 import logging
+import math
 import yaml
 import zmq
 import flask
@@ -46,7 +47,8 @@ def get_pose():
         logging.warn('Roaming marker not yet observed.')
         return 'Roaming marker not yet observed.', 404
 
-    R = Rotation.from_quat(pose[-4:]).as_euler('zyx', degrees=True)
+    R = Rotation.from_quat(pose[-4:]).as_matrix()
+    heading = math.degrees(math.atan2(R[1,0], R[0,0]))
 
     # get clues
     clues = []
@@ -65,7 +67,7 @@ def get_pose():
         'pose': {
             'x': float(pose[0]),
             'y': float(pose[1]),
-            'z': float(R[0])
+            'z': heading
         },
         'clues': clues
     }
