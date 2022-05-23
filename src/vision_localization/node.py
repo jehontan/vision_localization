@@ -138,38 +138,42 @@ def main():
                         roam_inds.append(i)
 
                 # just pick first fixed marker as reference
-                fixed_ind = fixed_inds[0]
-                origin_to_fixed = fixed_markers[ids_[fixed_ind]]
-                fixed_to_cam = transformation(rvecs[fixed_ind], tvecs[fixed_ind])
-                origin_to_cam = fixed_to_cam @ origin_to_fixed
 
-                # iterate over observed roaming markers
-                roaming_poses = dict()
+                if not fixed_inds:
+                    logging.warn('No fixed markers seen.')
+                else:
+                    fixed_ind = fixed_inds[0]
+                    origin_to_fixed = fixed_markers[ids_[fixed_ind]]
+                    fixed_to_cam = transformation(rvecs[fixed_ind], tvecs[fixed_ind])
+                    origin_to_cam = fixed_to_cam @ origin_to_fixed
 
-                for roam_ind in roam_inds:
-                    robot_to_cam = transformation(rvecs[roam_ind], tvecs[roam_ind])
+                    # iterate over observed roaming markers
+                    roaming_poses = dict()
 
-                    robot_to_origin = np.linalg.inv(origin_to_cam)@robot_to_cam
+                    for roam_ind in roam_inds:
+                        robot_to_cam = transformation(rvecs[roam_ind], tvecs[roam_ind])
 
-                    position = robot_to_origin[:,3]
-                    
-                    rot = Rotation.from_matrix(robot_to_origin[:3,:3])
-                    quat = rot.as_quat()
+                        robot_to_origin = np.linalg.inv(origin_to_cam)@robot_to_cam
 
-                    roaming_poses[ids_[roam_ind]] = [
-                        position[0],
-                        position[1],
-                        position[2],
-                        quat[0],
-                        quat[1],
-                        quat[2],
-                        quat[3]
-                    ]
+                        position = robot_to_origin[:,3]
+                        
+                        rot = Rotation.from_matrix(robot_to_origin[:3,:3])
+                        quat = rot.as_quat()
 
-                # send the poses
-                buf = json.dumps(roaming_poses).encode('utf-8')
-                socket.send_multipart([b'pose', buf])
-                logging.debug('sent')
+                        roaming_poses[ids_[roam_ind]] = [
+                            position[0],
+                            position[1],
+                            position[2],
+                            quat[0],
+                            quat[1],
+                            quat[2],
+                            quat[3]
+                        ]
+
+                    # send the poses
+                    buf = json.dumps(roaming_poses).encode('utf-8')
+                    socket.send_multipart([b'pose', buf])
+                    logging.debug('sent')
             
             # stream frame
             if is_streaming:
