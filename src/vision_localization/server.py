@@ -96,7 +96,7 @@ def mjpg_generator(cam_name):
 
 def load_config(args):
     '''Load markers from config YAML file.'''
-    global config, host, port, roaming_markers, camera_images
+    global config, host, port, roaming_markers, camera_images, TARGET_MARKER_ID
 
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
@@ -110,6 +110,8 @@ def load_config(args):
     for cam_name in config['cameras']:
         if config['cameras'][cam_name]['stream']:
             camera_images[cam_name] = None
+
+    TARGET_MARKER_ID = config['roaming_markers'][0]['id']
 
 def start_server():
     global host, port
