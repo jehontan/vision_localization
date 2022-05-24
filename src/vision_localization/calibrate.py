@@ -40,6 +40,7 @@ def main():
 
     parser = argparse.ArgumentParser(description='Camera calibration program.')
     parser.add_argument('-n', dest='num_images', required=False, default=100, type=int, help='Number of images to collect for calibration. Default: 100.')
+    parser.add_argument('-i', dest='cam', required=False, default=0, type=int, help='Camera input id. Default: 0.')
     parser.add_argument('-v', dest='visualize', action='store_true', help='Show image preview to help positioning.')
     parser.add_argument('-a', dest='host', required=False, type=str, default='0.0.0.0', help='Visualization server host. Default: "0.0.0.0".')
     parser.add_argument('-p', dest='port', required=False, type=int, default=5127, help='Visualization server port. Default: 5127.')
@@ -73,7 +74,7 @@ def main():
     allCharucoCorners = []
     allCharucoIds = []
 
-    camera = cv2.VideoCapture(0)
+    camera = cv2.VideoCapture(args.cam)
     _, frame = camera.read()
     img_size = frame.shape[:2]
 

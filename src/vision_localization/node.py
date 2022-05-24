@@ -78,6 +78,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('config', type=str, help='Configuration file.')
     parser.add_argument('camera', type=str, help='Camera name.')
+    parser.add_argument('-i', dest='camera_num', required=False, type=int, default=0, help='Camera input number. Default: 0')
     parser.add_argument('--log', dest='log_level', type=str, default='info', required=False, help='Logging level. [debug|info|warn|error|critical]')
 
     args = parser.parse_args()
@@ -99,7 +100,7 @@ def main():
     load_config(args)
 
     # init camera
-    camera = cv2.VideoCapture(0)
+    camera = cv2.VideoCapture(args.camera_num)
 
     # init ZMQ
     context = zmq.Context()
