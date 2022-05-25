@@ -26,7 +26,7 @@ setuptools.setup(
     install_requires=[
         'numpy>=1.13',
         'scipy>=1.7',
-        'opencv-contrib-python>=4.5',
+        # 'opencv-contrib-python==4.5.5.62',
         'flask>=2.0.2',
         'pyyaml >= 5.3.1',
         'pyzmq >= 22.1.0',
@@ -35,7 +35,7 @@ setuptools.setup(
         'console_scripts': [
             'localization_node=vision_localization.node:main',
             'localization_server=vision_localization.server:main',
-            'camera_calibrate=vision_localization.calibrate:main'
+            'camera_calibrate=vision_localization.calibrate:main',
             'offline_calibrate=vision_localization.offline_calibrate:main'
         ],
     }
