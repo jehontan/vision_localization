@@ -36,6 +36,7 @@ setuptools.setup(
             'localization_node=vision_localization.node:main',
             'localization_server=vision_localization.server:main',
             'camera_calibrate=vision_localization.calibrate:main'
+            'offline_calibrate=vision_localization.offline_calibrate:main'
         ],
     }
 )

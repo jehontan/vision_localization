@@ -42,6 +42,7 @@ def main():
     parser.add_argument('-n', dest='num_images', required=False, default=100, type=int, help='Number of images to collect for calibration. Default: 100.')
     parser.add_argument('-i', dest='cam', required=False, default=0, type=int, help='Camera input id. Default: 0.')
     parser.add_argument('-v', dest='visualize', action='store_true', help='Show image preview to help positioning.')
+    parser.add_argument('-d', dest='dump', required=False, action='store_true', help='Dump corners for offline calibration.')
     parser.add_argument('-a', dest='host', required=False, type=str, default='0.0.0.0', help='Visualization server host. Default: "0.0.0.0".')
     parser.add_argument('-p', dest='port', required=False, type=int, default=5127, help='Visualization server port. Default: 5127.')
     parser.add_argument('--log', dest='log_level', type=str, default='info', required=False, help='Logging level. [debug|info|warn|error|critical]')
@@ -111,19 +112,32 @@ def main():
                 with global_frame_lock:
                     global_frame = cv2.imencode('.jpg',frame)[1].tobytes()
 
-    repError, K, D, rvecs, tvecs = cv2.aruco.calibrateCameraCharuco(allCharucoCorners,
-                                                                    allCharucoIds,
-                                                                    board,
-                                                                    img_size,
-                                                                    np.eye(3),
-                                                                    np.zeros((4,1)))
+    if not args.dump:
+        repError, K, D, rvecs, tvecs = cv2.aruco.calibrateCameraCharuco(allCharucoCorners,
+                                                                        allCharucoIds,
+                                                                        board,
+                                                                        img_size,
+                                                                        np.eye(3),
+                                                                        np.zeros((4,1)))
 
-    with open(args.out_file, 'w') as f:
-        f.write('repError: {}\n'.format(repError))
-        f.write('fx:{}\nfy:{}\ncx:{}\ncy:{}\n'.format(K[0,0], K[1,1], K[0,2], K[1,2]))
-        f.write('D: {}\n'.format(D.flatten().tolist()))
+        with open(args.out_file, 'w') as f:
+            f.write('repError: {}\n'.format(repError))
+            f.write('fx: {}\nfy: {}\ncx: {}\ncy: {}\n'.format(K[0,0], K[1,1], K[0,2], K[1,2]))
+            f.write('D: {}\n'.format(D.flatten().tolist()))
 
-    logging.info('Wrote output to {}'.format(args.out_file))
+        logging.info('Wrote calibration output to {}'.format(args.out_file))
+    else:
+        allCharucoCorners = np.array(allCharucoCorners, dtype=object)
+        allCharucoIds = np.array(allCharucoIds, dtype=object)
+        np.savez(args.out_file,
+                 allCharucoCorners=allCharucoCorners,
+                 allCharucoIds=allCharucoIds,
+                 img_size=img_size,
+                 board_cols=args.board_cols,
+                 board_rows=args.board_rows,
+                 chess_size=args.chess_size,
+                 marker_size=args.marker_size)
+        logging.info('Wrote raw output to {}'.format(args.out_file))
 
 if __name__ == '__main__':
     main()
