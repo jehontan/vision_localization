@@ -100,7 +100,7 @@ def main():
             else:
                 ret, charucoCorners, charucoIds = cv2.aruco.interpolateCornersCharuco(corners, ids, frame, board)
 
-                if ret >= 6:
+                if ret >= 8:
                     allCharucoCorners.append(charucoCorners)
                     allCharucoIds.append(charucoIds)
                     logging.info('{} of {}'.format(len(allCharucoIds), args.num_images))
