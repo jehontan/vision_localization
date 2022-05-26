@@ -132,7 +132,7 @@ def main():
         np.savez(args.out_file,
                  allCharucoCorners=allCharucoCorners,
                  allCharucoIds=allCharucoIds,
-                 img_size=img_size,
+                 img_size=np.array(img_size, dtype=int),
                  board_cols=args.board_cols,
                  board_rows=args.board_rows,
                  chess_size=args.chess_size,

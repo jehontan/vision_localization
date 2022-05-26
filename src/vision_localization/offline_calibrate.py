@@ -33,12 +33,12 @@ def main():
 
     board = cv2.aruco.CharucoBoard_create(int(data['board_cols']), int(data['board_rows']), float(data['chess_size']), float(data['marker_size']), marker_dict)
 
-    repError, K, D, rvecs, tvecs = cv2.aruco.calibrateCameraCharuco(data['allCharucoCorners'],
-                                                                    data['allCharucoIds'],
+    repError, K, D, rvecs, tvecs = cv2.aruco.calibrateCameraCharuco(data['allCharucoCorners'].tolist(),
+                                                                    data['allCharucoIds'].tolist(),
                                                                     board,
                                                                     data['img_size'],
                                                                     np.eye(3),
-                                                                    np.zeros((4,1)))
+                                                                    np.zeros((5,1)))
 
     with open(args.out_file, 'w') as f:
                 f.write('repError: {}\n'.format(repError))
@@ -46,6 +46,7 @@ def main():
                 f.write('D: {}\n'.format(D.flatten().tolist()))
 
     logging.info('Wrote calibration output to {}'.format(args.out_file))
+    logging.info('Done.')
 
 if __name__ == '__main__':
     main()
