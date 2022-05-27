@@ -5,6 +5,7 @@ import math
 import yaml
 import zmq
 import flask
+from werkzeug.serving import WSGIRequestHandler
 import json
 from scipy.spatial.transform import Rotation
 from threading import Thread, Lock
@@ -28,6 +29,9 @@ def distance(p1, p2):
     return sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2)
 
 ##### Flask server #####
+
+# Flask defaults to HTTP 1.0. Use HTTP 1.1 to keep connections alive for high freqeuncy requests.
+WSGIRequestHandler.protocol_version = 'HTTP/1.1'
 
 app = flask.Flask(__name__)
 
