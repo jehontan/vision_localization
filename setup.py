@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="vision_localization",
-    version="1.0.1",
+    version="1.0.2",
     author="Je Hon Tan",
     author_email="jehontan@gmail.com",
     description="Vision-based localization using ArUco markers.",
@@ -24,10 +24,10 @@ setuptools.setup(
     packages=setuptools.find_packages(where="src"),
     python_requires=">=3.8",
     install_requires=[
-        'numpy>=1.13',
-        'scipy>=1.7',
-        # 'opencv-contrib-python==4.5.5.62',
-        'flask>=2.0.2',
+        'numpy >= 1.19', # Debian Bullseye Stable python3-numpy
+        'scipy >= 1.6', # Debian Bullseye Stable python3-scipy
+        'opencv-contrib-python >= 4.5.1', # Debian Bullseye Stable python3-opencv
+        'flask >= 2.0.2',
         'pyyaml >= 5.3.1',
         'pyzmq >= 22.1.0',
     ],
