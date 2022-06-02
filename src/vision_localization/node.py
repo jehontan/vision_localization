@@ -6,6 +6,7 @@ from scipy.spatial.transform import Rotation
 import numpy as np
 import zmq
 import json
+from enum import IntEnum
 
 ##### Global variables #####
 config = dict()             # global configuration
@@ -69,6 +70,117 @@ def load_config(args):
     for marker in config['roaming_markers']:
         roaming_markers.append(marker['id'])
 
+##### Node class ####
+
+class SelectPolicy(IntEnum):
+    FIRST = 0
+    CLOSEST = 1
+    BEST = 2
+
+class LocalizationNode:
+    def __init__(self,
+                 marker_dict,
+                 marker_size,
+                 K,
+                 D,
+                 fixed_markers,
+                 roaming_markers,
+                 name='LocalizationNode',
+                 select_policy='first'):
+
+        self.marker_dict = marker_dict
+        self.marker_size = marker_size
+        self.K = K
+        self.D = D
+        self.fixed_markers = fixed_markers
+        self.roaming_markers = roaming_markers
+        self.name = name
+        self.logger = logging.getLogger(name)
+
+        map_select_policy = {
+            'first': SelectPolicy.FIRST,
+            'closest': SelectPolicy.CLOSEST,
+            'best': SelectPolicy.BEST,
+        }
+        self.select_policy = map_select_policy[select_policy]
+
+    def frame_callback(self, frame):
+        corners, ids, _ = cv2.aruco.detectMarkers(frame, self.marker_dict)
+
+        if self.select_policy == SelectPolicy.CLOSEST:
+            centers = [np.average(c[0], axis=0) for c in corners]
+        elif self.select_policy == SelectPolicy.BEST:
+            quality = [abs((c[0][0,:]-c[0][2:0])/(c[0][1,:]-c[0][3,:])) for c in corners] 
+
+        roaming_poses = dict()
+
+        if not corners:
+            # no markers, early terminate
+            self.logger.warn('No markers found.')
+        else:
+            rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners, self.marker_size, self.K, self.D)
+            ids_ = ids.flatten().tolist()
+            
+            fixed_inds = [] # indices corresponding to observed fixed markers
+            roam_inds = []  # indices corresponding to observed roaming markers
+
+            for i, id_ in enumerate(ids_):
+                if id_ in self.fixed_markers.keys():
+                    fixed_inds.append(i)
+                
+                if id_ in self.roaming_markers:
+                    roam_inds.append(i)
+
+            if not fixed_inds:
+                self.logger.warn('No fixed markers seen.')
+            else:
+                # iterate over observed roaming markers
+                
+                if self.select_policy == SelectPolicy.CLOSEST:
+                    fixed_centers = [centers[f] for f in fixed_inds]
+                elif self.select_policy == SelectPolicy.BEST:
+                    fixed_quality = [quality[f] for f in fixed_inds]
+
+                for roam_ind in roam_inds:
+                    # pick fixed marker reference based on policy
+                    if self.select_policy == SelectPolicy.FIRST:
+                        # default to picking first seen fixed marker
+                        fixed_ind = fixed_inds[0]
+                    elif self.select_policy == SelectPolicy.CLOSEST:
+                        # pick closest marker
+                        distances = np.linalg.norm(np.subtract(fixed_centers, centers[roam_ind][0]), axis=1)
+                        fixed_ind = fixed_inds[np.argmin(distances)]
+                    elif self.select_policy == SelectPolicy.BEST:
+                        # use best marker                            
+                        fixed_ind = fixed_inds[np.argmax(fixed_quality)]
+
+                    # calculate transform
+                    origin_to_fixed = self.fixed_markers[ids_[fixed_ind]]
+                    fixed_to_cam = transformation(rvecs[fixed_ind], tvecs[fixed_ind])
+                    origin_to_cam = fixed_to_cam @ origin_to_fixed
+
+                    robot_to_cam = transformation(rvecs[roam_ind], tvecs[roam_ind])
+
+                    robot_to_origin = np.linalg.inv(origin_to_cam)@robot_to_cam
+
+                    position = robot_to_origin[:,3]
+                    
+                    rot = Rotation.from_matrix(robot_to_origin[:3,:3])
+                    quat = rot.as_quat()
+
+                    roaming_poses[ids_[roam_ind]] = [
+                        position[0],
+                        position[1],
+                        position[2],
+                        quat[0],
+                        quat[1],
+                        quat[2],
+                        quat[3]
+                    ]
+
+        return roaming_poses, ids, corners
+
+
 ##### Main function #####
 
 def main():
@@ -96,16 +208,7 @@ def main():
 
     logging.basicConfig(level=map_log_level[args.log_level],
                 format='[%(levelname)5s][%(asctime)s][%(name)s]: %(message)s',
-                datefmt='%H:%M:%S')
-
-    # setup fixed marker selection policy
-    map_select_policy = {
-        'first': 0,
-        'closest': 1,
-        'best': 2,
-    }
-
-    select_policy = map_select_policy[args.policy]
+                datefmt='%H:%M:%S')   
 
     load_config(args)
 
@@ -117,100 +220,40 @@ def main():
     socket = context.socket(zmq.PUB)
     socket.bind('tcp://{}:{}'.format(host, port))
 
+    # init node
+    node = LocalizationNode(marker_dict=marker_dict,
+                            marker_size=config['marker_size'],
+                            K = K,
+                            D = D,
+                            fixed_markers=fixed_markers,
+                            roaming_markers=roaming_markers,
+                            select_policy=args.policy)
+
     try:
         while True:
             ret, frame = camera.read()
 
             if not ret:
-                # problem with image, early terminate
-                logging.warn('Camera read failed.')
+                logging.warn('Cannot get frame from camera.')
                 continue
             
-            corners, ids, _ = cv2.aruco.detectMarkers(frame, marker_dict)
+            roaming_poses, corners, ids = node.frame_callback(frame)
 
-            if select_policy == 1:
-                centers = [np.average(c[0], axis=0) for c in corners]
-            elif select_policy == 2:
-                quality = [abs((c[0][0,:]-c[0][2:0])/(c[0][1,:]-c[0][3,:])) for c in corners] 
+            # send the poses
+            buf = json.dumps(roaming_poses).encode('utf-8')
+            socket.send_multipart([b'pose', buf])
+            logging.debug('sent')
 
-            if not corners:
-                # no markers, early terminate
-                logging.warn('No markers found.')
-            else:
-                # annotate frame
-                frame = cv2.aruco.drawDetectedMarkers(frame, corners, ids)
-
-                rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners, config['marker_size'], K, D)
-                ids_ = ids.flatten().tolist()
-                
-                fixed_inds = [] # indices corresponding to observed fixed markers
-                roam_inds = []  # indices corresponding to observed roaming markers
-
-                for i, id_ in enumerate(ids_):
-                    if id_ in fixed_markers.keys():
-                        fixed_inds.append(i)
-                    
-                    if id_ in roaming_markers:
-                        roam_inds.append(i)
-
-                if not fixed_inds:
-                    logging.warn('No fixed markers seen.')
-                else:
-                    # iterate over observed roaming markers
-                    roaming_poses = dict()
-                    
-                    if select_policy == 1:
-                        fixed_centers = [centers[f] for f in fixed_inds]
-                    elif select_policy == 2:
-                        fixed_quality = [quality[f] for f in fixed_inds]
-
-                    for roam_ind in roam_inds:
-                        # pick fixed marker reference based on policy
-                        if select_policy == 0:
-                            # default to picking first seen fixed marker
-                            fixed_ind = fixed_inds[0]
-                        elif select_policy == 1:
-                            # pick closest marker
-                            distances = np.linalg.norm(np.subtract(fixed_centers, centers[roam_ind][0]), axis=1)
-                            fixed_ind = fixed_inds[np.argmin(distances)]
-                        elif select_policy ==2:
-                            # use best marker                            
-                            fixed_ind = fixed_inds[np.argmax(fixed_quality)]
-
-                        origin_to_fixed = fixed_markers[ids_[fixed_ind]]
-                        fixed_to_cam = transformation(rvecs[fixed_ind], tvecs[fixed_ind])
-                        origin_to_cam = fixed_to_cam @ origin_to_fixed
-
-                        robot_to_cam = transformation(rvecs[roam_ind], tvecs[roam_ind])
-
-                        robot_to_origin = np.linalg.inv(origin_to_cam)@robot_to_cam
-
-                        position = robot_to_origin[:,3]
-                        
-                        rot = Rotation.from_matrix(robot_to_origin[:3,:3])
-                        quat = rot.as_quat()
-
-                        roaming_poses[ids_[roam_ind]] = [
-                            position[0],
-                            position[1],
-                            position[2],
-                            quat[0],
-                            quat[1],
-                            quat[2],
-                            quat[3]
-                        ]
-
-                    # send the poses
-                    buf = json.dumps(roaming_poses).encode('utf-8')
-                    socket.send_multipart([b'pose', buf])
-                    logging.debug('sent')
-            
             # stream frame
             if is_streaming:
+                
+                # annotate frame
+                if corners:
+                    frame = cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+
                 data = cv2.imencode('.jpg', frame)[1].tobytes()
                 socket.send_multipart([b'img', args.camera.encode('utf-8'), data])
                 logging.debug('Sent image.')
-
     finally:
         camera.release()
 
