@@ -1,5 +1,4 @@
 import argparse
-from calendar import c
 import logging
 import math
 import yaml
@@ -12,6 +11,11 @@ from threading import Thread, Lock
 from math import sqrt
 from pathlib import Path
 import base64
+from node import LocalizationNode
+import numpy as np
+from multiprocessing import Process, Queue
+from queue import Full as FullException
+import cv2
 
 ##### Global variables #####
 
@@ -119,6 +123,36 @@ def load_config(args):
 
     TARGET_MARKER_ID = config['roaming_markers'][0]['id']
 
+##### Main #####
+
+def proc_fun(queue:Queue, config):
+    # init socket
+    context = zmq.Context()
+    socket = context.socket(zmq.SUB)
+    socket.subscribe(b'raw')
+
+    node = LocalizationNode(
+        marker_dict=config['marker_dict'],
+        marker_size=config['marker_size'],
+        K=config['K'],
+        D=config['D'],
+        fixed_markers=config['fixed_markers'],
+        roaming_markers=config['roaming_markers'],
+        name=config['name'],
+        select_policy=config['select_policy'],
+    )
+
+    while True:
+        topic, h, w, d, data = socket.recv_multipart()
+        frame = np.frombuffer(data, np.uint8).reshape((int(h), int(w), int(d)))
+
+        roaming_poses, corners, ids = node.frame_callback(frame)
+
+        try:
+            queue.put_nowait(roaming_poses)
+        except FullException:
+            logging.warn('Queue is full.')
+
 def start_server():
     global host, port
     app.run(host, port)
@@ -129,6 +163,8 @@ def main():
     # setup args
     parser = argparse.ArgumentParser()
     parser.add_argument('config', type=str, help='Configuration file.')
+    parser.add_argument('-s', dest='stream_only', action='store_true', help='Set server to receive remote image streams and perform local processing.')
+    parser.add_argument('--policy', dest='policy', required=False, type=str, default='first', help='Fixed marker selection policy. [first|closest|best]. Default: first')
     parser.add_argument('--log', dest='log_level', type=str, default='info', required=False, help='Logging level. [debug|info|warn|error|critical]')
 
     args = parser.parse_args()
@@ -149,38 +185,92 @@ def main():
 
     load_config(args)
 
-    # init ZMQ
-    context = zmq.Context()
-    socket = context.socket(zmq.SUB)
-    socket.subscribe(b'pose')
-    socket.subscribe(b'img')
-    
-    for cam_name in config['cameras']:
-        cam = config['cameras'][cam_name]
-        logging.debug('Connecting to ' + 'tcp://{}:{}'.format(cam['host'], cam['port']))
-        socket.connect('tcp://{}:{}'.format(cam['host'], cam['port']))
+    if args.stream_only:
+        # init constants
+        marker_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_1000)
+        fixed_markers_ = dict()
+        roaming_markers_ = list()
 
-    # start Flask server
-    server_thread = Thread(target=start_server, daemon=True)
-    server_thread.start()
+        for marker in config['fixed_markers']:
+            position = marker['position']
+            orientation = marker['orientation']
+            R = Rotation.from_euler('xyz', [orientation['x'], orientation['y'], orientation['z']])
+            t = -np.array([position['x'], position['y'], position['z']])
+            T = np.eye(4)
+            T[:3,:3] = R.as_matrix()
+            T[:3,3] = t
+            fixed_markers_[marker['id']] = T
 
-    while True:
-        buf = socket.recv_multipart()
-        topic = buf[0]
+        for marker in config['roaming_markers']:
+            roaming_markers_.append(marker['id'])
 
-        if topic == b'pose':
-            poses = json.loads(buf[1])
+        queue = Queue(maxsize=5)
+        processes = []
+        for cam in config['cameras']:
+            fx = config['cameras'][cam]['fx']
+            fy = config['cameras'][cam]['fy']
+            cx = config['cameras'][cam]['cx']
+            cy = config['cameras'][cam]['cy']
             
-            roaming_markers_lock.acquire()
-            for marker_id, marker_pose in poses.items():
-                marker_id = int(marker_id)
-                roaming_markers[marker_id] = marker_pose
-            roaming_markers_lock.release()
-        if topic == b'img':
-            cam_name = buf[1].decode('utf-8')
-            camera_images_lock.acquire()
-            camera_images[cam_name] = buf[2]
-            camera_images_lock.release()
+            K = np.array([[fx, 0, cx],[0, fy, cy],[0, 0, 1]])
+            D = np.array(config['cameras'][cam]['D'])
+
+            config_ = {
+                'marker_dict': marker_dict,
+                'marker_size': config['marker_size'],
+                'K': K,
+                'D': D,
+                'fixed_markers': fixed_markers_,
+                'roaming_markers': roaming_markers_,
+                'name': cam,
+                'select_policy': args.policy,
+            }
+            subprocess = Process(target=proc_fun, args=(queue, config_))
+            subprocess.start()
+            processes.append(subprocess)
+        
+        # start Flask server
+        server_thread = Thread(target=start_server, daemon=True)
+        server_thread.start()
+
+        while True:
+            new_poses = queue.get()
+            with roaming_markers_lock:
+                roaming_markers.update(new_poses)
+
+    else:
+        # init ZMQ
+        context = zmq.Context()
+        socket = context.socket(zmq.SUB)
+        socket.subscribe(b'pose')
+        socket.subscribe(b'img')
+        
+        for cam_name in config['cameras']:
+            cam = config['cameras'][cam_name]
+            logging.debug('Connecting to ' + 'tcp://{}:{}'.format(cam['host'], cam['port']))
+            socket.connect('tcp://{}:{}'.format(cam['host'], cam['port']))
+
+        # start Flask server
+        server_thread = Thread(target=start_server, daemon=True)
+        server_thread.start()
+
+        while True:
+            buf = socket.recv_multipart()
+            topic = buf[0]
+
+            if topic == b'pose':
+                poses = json.loads(buf[1])
+                
+                roaming_markers_lock.acquire()
+                for marker_id, marker_pose in poses.items():
+                    marker_id = int(marker_id)
+                    roaming_markers[marker_id] = marker_pose
+                roaming_markers_lock.release()
+            if topic == b'img':
+                cam_name = buf[1].decode('utf-8')
+                camera_images_lock.acquire()
+                camera_images[cam_name] = buf[2]
+                camera_images_lock.release()
 
 
 if __name__ == '__main__':

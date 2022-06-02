@@ -40,6 +40,8 @@ def load_config(args):
     '''Load markers from config YAML file.'''
     global config, fixed_markers, roaming_markers, host, port, K, D, is_streaming
 
+    # TODO reduce use of globals
+
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
 
@@ -225,8 +227,10 @@ def main():
         if args.stream_only:
             while True:
                 ret, frame = camera.read()
-                data = cv2.imencode('.jpg', frame)[1].tobytes()
-                socket.send_multipart([b'img', args.camera.encode('utf-8'), data])
+                if ret:
+                    h, w, d = frame.shape
+                    data = frame.tobytes() # send raw image
+                    socket.send_multipart([b'raw', bytes(h), bytes(w), bytes(d), data])
         else:
             node = LocalizationNode(marker_dict=marker_dict,
                                     marker_size=config['marker_size'],
