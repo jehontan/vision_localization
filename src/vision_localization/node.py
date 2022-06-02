@@ -191,6 +191,7 @@ def main():
     parser.add_argument('config', type=str, help='Configuration file.')
     parser.add_argument('camera', type=str, help='Camera name.')
     parser.add_argument('-i', dest='camera_num', required=False, type=int, default=0, help='Camera input number. Default: 0')
+    parser.add_argument('-s', dest='stream_only', action='store_true', help='Set node to stream only, processing handled on remote.')
     parser.add_argument('--policy', dest='policy', required=False, type=str, default='first', help='Fixed marker selection policy. [first|closest|best]. Default: first')
     parser.add_argument('--log', dest='log_level', type=str, default='info', required=False, help='Logging level. [debug|info|warn|error|critical]. Default: info')
 
@@ -220,40 +221,43 @@ def main():
     socket = context.socket(zmq.PUB)
     socket.bind('tcp://{}:{}'.format(host, port))
 
-    # init node
-    node = LocalizationNode(marker_dict=marker_dict,
-                            marker_size=config['marker_size'],
-                            K = K,
-                            D = D,
-                            fixed_markers=fixed_markers,
-                            roaming_markers=roaming_markers,
-                            select_policy=args.policy)
-
     try:
-        while True:
-            ret, frame = camera.read()
-
-            if not ret:
-                logging.warn('Cannot get frame from camera.')
-                continue
-            
-            roaming_poses, corners, ids = node.frame_callback(frame)
-
-            # send the poses
-            buf = json.dumps(roaming_poses).encode('utf-8')
-            socket.send_multipart([b'pose', buf])
-            logging.debug('sent')
-
-            # stream frame
-            if is_streaming:
-                
-                # annotate frame
-                if corners:
-                    frame = cv2.aruco.drawDetectedMarkers(frame, corners, ids)
-
+        if args.stream_only:
+            while True:
+                ret, frame = camera.read()
                 data = cv2.imencode('.jpg', frame)[1].tobytes()
                 socket.send_multipart([b'img', args.camera.encode('utf-8'), data])
-                logging.debug('Sent image.')
+        else:
+            node = LocalizationNode(marker_dict=marker_dict,
+                                    marker_size=config['marker_size'],
+                                    K = K,
+                                    D = D,
+                                    fixed_markers=fixed_markers,
+                                    roaming_markers=roaming_markers,
+                                    select_policy=args.policy)
+            while True:
+                ret, frame = camera.read()
+
+                if not ret:
+                    logging.warn('Cannot get frame from camera.')
+                    continue
+                
+                roaming_poses, corners, ids = node.frame_callback(frame)
+
+                # send the poses
+                buf = json.dumps(roaming_poses).encode('utf-8')
+                socket.send_multipart([b'pose', buf])
+                logging.debug('sent')
+
+                # stream frame
+                if is_streaming:
+                    # annotate frame
+                    if corners:
+                        frame = cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+
+                    data = cv2.imencode('.jpg', frame)[1].tobytes()
+                    socket.send_multipart([b'img', args.camera.encode('utf-8'), data])
+                    logging.debug('Sent image.')
     finally:
         camera.release()
 
