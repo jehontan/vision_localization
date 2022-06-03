@@ -131,7 +131,11 @@ def main():
             if select_policy == 1:
                 centers = [np.average(c[0], axis=0) for c in corners]
             elif select_policy == 2:
-                quality = [abs((c[0][0,:]-c[0][2:0])/(c[0][1,:]-c[0][3,:])) for c in corners] 
+                quality = list()
+                for c in corners:
+                    d1 = np.linalg.norm(c[0][0,:]-c[0][2,:])
+                    d2 = np.linalg.norm(c[0][1,:]-c[0][3,:])
+                    quality.append(d1/d2 if d1 <= d2 else d2/d1)
 
             if not corners:
                 # no markers, early terminate
