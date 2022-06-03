@@ -1,4 +1,8 @@
 ---
+# System parameters
+select_policy: closest # [first | closest | best]
+process_on_server: on # cameras stream only, processing on server
+
 # Marker parameters
 marker_size: 0.1
 roaming_markers:
@@ -44,7 +48,7 @@ fixed_markers:
 # Camera nodes
 cameras:
   camera_1:
-    host: '127.0.0.1'
+    host: 'camera1.local'
     port: 5912
     stream: on
     fx: 1426.67
@@ -52,35 +56,43 @@ cameras:
     cx: 960.00
     cy: 540.00
     D: [0.0, 0.0, 0.0, 0.0, 0.0] # distortion params
+    width: 1920
+    height: 1080
   camera_2:
-    host: '0.0.0.0'
+    host: 'camera2.local'
     port: 5912
-    stream: off
+    stream: on
     fx: 1426.67
     fy: 1134.56
     cx: 960.00
     cy: 540.00
     D: [0.0, 0.0, 0.0, 0.0, 0.0]
+    width: 1920
+    height: 1080
   camera_3:
-    host: '0.0.0.0'
+    host: 'camera3.local'
     port: 5912
-    stream: off
+    stream: on
     fx: 1426.67
     fy: 1134.56
     cx: 960.00
     cy: 540.00
     D: [0.0, 0.0, 0.0, 0.0, 0.0]
+    width: 1920
+    height: 1080
   camera_4:
-    host: '0.0.0.0'
+    host: 'camera4.local'
     port: 5912
-    stream: off
+    stream: on
     fx: 1426.67
     fy: 1134.56
     cx: 960.00
     cy: 540.00
     D: [0.0, 0.0, 0.0, 0.0, 0.0]
+    width: 1920
+    height: 1080
 
-# Localiztion server
+# Localization server
 server:
   host: '0.0.0.0'
   port: 5566
