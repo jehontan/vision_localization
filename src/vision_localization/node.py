@@ -3,7 +3,7 @@ import argparse
 import logging
 import zmq
 import json
-from core import *
+from .core import *
 
 ##### Main function #####
 
