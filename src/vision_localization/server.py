@@ -15,7 +15,7 @@ from multiprocessing import Process, Queue, Event, Lock
 from multiprocessing.shared_memory import SharedMemory
 from queue import Full as FullException
 import cv2
-from core import *
+from .core import *
 import time
 
 ##### Global variables #####
